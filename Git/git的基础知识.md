@@ -544,6 +544,50 @@ index c008d76..0cc71a7 100644
 
 ![image.png](https://typora-yzj.oss-cn-hangzhou.aliyuncs.com/img/20241227230451.png)
 
+基础用法：
+
++ **git branch**:
+    + 不带任何参数时，默认==只列出分支名称，不显示详细信息==。
+    + `-v` 参数表示显示本地所有分支及其最近一次提交的信息。
+    + `-a` 参数表示显示所有本地和远程分支。
+    + 后面跟一个名字，表示创建分支。
+    + `-d` 参数表示删除本地分支。
+
+切换分支：
+
+```shell
+# 切换到 branch01 分支
+$ git switch branch01
+# 创建一个新分支并切换到该分支
+$ git switch -c new-branch
+
+# 当前分支有未提交的更改，包括未暂存和未提交的更改，则会提示
+$ git switch dev
+error: Your local changes to the following files would be overwritten by checkout:
+        test4.txt
+Please commit your changes or stash them before you switch branches.
+Aborting
+```
+
+git switch 和 git checkout 主要区别
+
+| 特点   | git switch | git checkout |
+| ---- | ---------- | ------------ |
+| 主要功能 | 切换分支       | 切换分支、恢复文件    |
+| 语法   | 更简洁        | 相对复杂         |
+| 专注度  | 只关注分支操作    | 同时处理分支和文件操作  |
+| 引入版本 | Git 2.23   | 早期 Git 版本    |
+>git switch 和 git checkout 主要区别
+>1. 如果当前分支有未提交的更改，则 `git switch` 命令将拒绝切换，并提示您在切换分支之前提交或撤消更改；而 `git checkout` 命令将覆盖这些更改。因此，在使用 `git checkout` 命令切换分支之前，请确保已经提交或撤消了所有更改。
+>1. `git checkout` 可以用于恢复文件，而 `git switch` 则不行
+
+合并分支：
+
+```shell
+# 将dev分支的操作合并到master分支，必须先切回master分支
+$ git merge dev
+```
+
 具体实现：
 
 ```shell
@@ -551,4 +595,511 @@ index c008d76..0cc71a7 100644
 $ git branch -v
 * master ad32375 add test3
 # 我们创建`dev`分支，然后切换到`dev`分支：
+$ git branch dev
+$ git switch dev
+M       test3.txt
+Switched to branch 'dev'
+$ git branch
+* dev
+  master
+$ vim test4.txt
+$ git add test4.txt
+$ git commit -m "add test4"
+[dev 90fbc76] add test4
+ 1 file changed, 1 insertion(+)
+ create mode 100644 test4.txt
+ $ tree .
+.
+├── LICENSE
+├── bak.txt
+├── file.txt
+├── readme.txt
+├── test2.txt
+├── test3.txt
+└── test4.txt
+0 directories, 7 files
+# 从上面可见我们以及在dev分支创建了一个新文件，并写入了内容
+# 切回master分支
+$ git switch master
+Switched to branch 'master'
+$ tree . 
+.
+├── LICENSE
+├── bak.txt
+├── file.txt
+├── readme.txt
+├── test2.txt
+└── test3.txt
+
+0 directories, 6 files
+$ git merge dev
+Updating ad32375..90fbc76
+Fast-forward
+ test4.txt | 1 +
+ 1 file changed, 1 insertion(+)
+ create mode 100644 test4.txt
+# 此时master分支就有内容了，此时可以删除dev分支
+$ git branch -d dev
+Deleted branch dev (was 90fbc76).
 ```
+
+### 解决冲突
+
+人生不如意之事十之八九，合并分支往往也不是一帆风顺的。
+
+准备新的 `feature1` 分支，继续我们的新分支开发：
+
+```shell
+$ git switch -c feature1
+Switched to a new branch 'feature1'
+```
+
+修改`readme.txt`最后一行，改为：
+
+```plain
+Creating a new branch is quick AND simple.
+```
+
+在 `feature1` 分支上提交：
+
+```shell
+$ git add readme.txt
+
+$ git commit -m "AND simple"
+[feature1 14096d0] AND simple
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+```
+
+切换到 `master` 分支：
+
+```shell
+$ git switch master
+Switched to branch 'master'
+Your branch is ahead of 'origin/master' by 1 commit.
+  (use "git push" to publish your local commits)
+```
+
+在 `master` 分支上把 `readme.txt` 文件的最后一行改为：
+
+```plain
+Creating a new branch is quick & simple.
+```
+
+提交：
+
+```shell
+$ git add readme.txt 
+$ git commit -m "& simple"
+[master 5dc6824] & simple
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+```
+
+现在，`master`分支和`feature1`分支各自都分别有新的提交，变成了这样：
+
+![image.png](https://typora-yzj.oss-cn-hangzhou.aliyuncs.com/img/20241228202230.png)
+
+这种情况下，Git无法执行“快速合并”，只能试图把各自的修改合并起来，但这种合并就可能会有冲突，我们试试看：
+
+```shell
+$ git merge feature1
+Auto-merging readme.txt
+CONFLICT (content): Merge conflict in readme.txt
+Automatic merge failed; fix conflicts and then commit the result.
+```
+
+果然冲突了！Git告诉我们，`readme.txt` 文件存在冲突，必须手动解决冲突后再提交。`git status`也可以告诉我们冲突的文件：
+
+```plain
+$ git status
+On branch master
+Your branch is ahead of 'origin/master' by 2 commits.
+  (use "git push" to publish your local commits)
+
+You have unmerged paths.
+  (fix conflicts and run "git commit")
+  (use "git merge --abort" to abort the merge)
+
+Unmerged paths:
+  (use "git add <file>..." to mark resolution)
+
+	both modified:   readme.txt
+
+no changes added to commit (use "git add" and/or "git commit -a")
+```
+
+我们可以直接查看readme.txt的内容：
+
+```plain
+Git is a distributed version control system.
+Git is free software distributed under the GPL.
+Git has a mutable index called stage.
+Git tracks changes of files.
+<<<<<<< HEAD
+Creating a new branch is quick & simple.
+=======
+Creating a new branch is quick AND simple.
+>>>>>>> feature1
+```
+
+Git用 `<<<<<<< ======= 和 >>>>>>>` 标记出不同分支的内容，这里我们需要和另一分支的提交者沟通后，保留唯一提交，当我们修改后如下后保存：
+
+```plain
+Git is a distributed version control system.
+Git is free software distributed under the GPL.
+Git has a mutable index called stage.
+Git tracks changes of files.
+Creating a new branch is quick and simple.
+```
+
+再提交：
+
+```plain
+$ git add readme.txt 
+$ git commit -m "conflict fixed"
+[master cf810e4] conflict fixed
+```
+
+现在，`master`分支和`feature1`分支变成了下图所示：
+
+![image.png](https://typora-yzj.oss-cn-hangzhou.aliyuncs.com/img/20241228202658.png)
+
+用带参数的 `git log` 也可以看到分支的合并情况：
+
+```shell
+$ git log --graph --pretty=oneline --abbrev-commit
+*   cf810e4 (HEAD -> master) conflict fixed
+|\  
+| * 14096d0 (feature1) AND simple
+* | 5dc6824 & simple
+|/  
+* b17d20e branch test
+* d46f35e (origin/master) remove test.txt
+* b84166e add test.txt
+* 519219b git tracks changes
+* e43a48b understand how stage works
+* 1094adb append GPL
+* e475afc add distributed
+* eaadf4e wrote a readme file
+```
+
+最后，删除`feature1`分支：
+
+```shell
+$ git branch -d feature1
+Deleted branch feature1 (was 14096d0).
+```
+
+工作完成。
+
+###  分支管理策略
+
+通常，合并分支时，如果可能，Git会用 `Fast forward` 模式，但这种模式下，删除分支后，会丢掉分支信息。
+
+如果要强制禁用 `Fast forward` 模式，Git 就会在 merge 时生成一个新的 commit，这样，从分支历史上就可以看出分支信息。
+
+下面我们实战一下 `--no-ff` 方式的 `git merge`：
+
+首先，仍然创建并切换 `dev` 分支：
+
+```plain
+$ git switch -c dev
+Switched to a new branch 'dev'
+```
+
+修改readme.txt文件，并提交一个新的commit：
+
+```plain
+$ git add readme.txt 
+$ git commit -m "add merge"
+[dev f52c633] add merge
+ 1 file changed, 1 insertion(+)
+```
+
+现在，我们切换回`master`：
+
+```plain
+$ git switch master
+Switched to branch 'master'
+```
+
+准备合并`dev`分支，请注意`--no-ff`参数，表示禁用`Fast forward`：
+
+```plain
+$ git merge --no-ff -m "merge with no-ff" dev
+Merge made by the 'recursive' strategy.
+ readme.txt | 1 +
+ 1 file changed, 1 insertion(+)
+```
+
+因为本次合并要创建一个新的commit，所以加上`-m`参数，把commit描述写进去。
+
+合并后，我们用`git log`看看分支历史：
+
+```plain
+$ git log --graph --pretty=oneline --abbrev-commit
+*   e1e9c68 (HEAD -> master) merge with no-ff
+|\  
+| * f52c633 (dev) add merge
+|/  
+*   cf810e4 conflict fixed
+...
+```
+
+可以看到，不使用`Fast forward`模式，merge后就像这样：
+
+![image.png](https://typora-yzj.oss-cn-hangzhou.aliyuncs.com/img/20241228205255.png)
+
+总结：
+1. git merge默认使用的时“快进”（fast-forward）模式，所以 dev 合并到 master 分支时,Git 在合并两者时，只会简单地把指针右移，如下图：
+
+    ![image.png](https://typora-yzj.oss-cn-hangzhou.aliyuncs.com/img/20241228222435.png)
+    
+2. git merge --no-ff 代码合并，表示禁止使用快进模式，所以会**生成一个新的提交**：
+
+    ![image.png](https://typora-yzj.oss-cn-hangzhou.aliyuncs.com/img/20241228215941.png)
+在 `--no-ff` 模式下进行回退：
+在 main 分支进行回退一个版本操作，会撤销合并：
+
+![image.png](https://typora-yzj.oss-cn-hangzhou.aliyuncs.com/img/20241228220534.png)
+
+在 dev 分支进行回退一个版本操作，发现合并历史依然存在：
+
+![image.png](https://typora-yzj.oss-cn-hangzhou.aliyuncs.com/img/20241228220913.png)
+
+就算在 master 分支删除 dev 分支，提交记录依然存在：
+
+![image.png](https://typora-yzj.oss-cn-hangzhou.aliyuncs.com/img/20241228221427.png)
+
+在没有参数 `--no-ff` 下进行回退：
+
+无论在哪个分支，回退都是各自回退。
+
+![image.png](https://typora-yzj.oss-cn-hangzhou.aliyuncs.com/img/20241228222917.png)
+
+在 master 分支删除 dev 分支，其他dev分支提交记录不可见了：
+
+![image.png](https://typora-yzj.oss-cn-hangzhou.aliyuncs.com/img/20241228223230.png)
+
+### Bug分支
+
+软件开发中，bug 就像家常便饭一样。有了 bug 就需要修复，在 Git 中，由于分支是如此的强大，所以，每个 bug 都可以通过一个新的临时分支来修复，修复后，合并分支，然后将临时分支删除。
+
+当你接到一个修复一个代号101的 bug 的任务时，很自然地，你想创建一个分支 `issue-101` 来修复它，但是，等等，当前正在 `dev` 上进行的工作还没有提交：
+
+```shell
+$ git status
+On branch dev
+Changes to be committed:
+  (use "git restore --staged <file>..." to unstage)
+        modified:   devWork.txt
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+        modified:   readme.txt
+
+```
+
+并不是你不想提交，而是工作只进行到一半，还没法提交，预计完成还需1天时间。但是，必须在两个小时内修复该 bug，怎么办？
+
+幸好，Git还提供了一个 `stash` 功能，可以把当前工作现场“储藏”起来，等以后恢复现场后继续工作：
+
+```shell
+$ git stash
+Saved working directory and index state WIP on dev: 719f2e9 add dev work 2.
+```
+
+![image.png](https://typora-yzj.oss-cn-hangzhou.aliyuncs.com/img/20241228224614.png)
+
+> git stash 只能缓存被跟踪的文件，本次新增的文件并不能被缓存，需要先 add 添加进暂存区之后才能被缓存。
+
+现在，用 `git status`查看工作区，就是干净的（除非有没有被Git管理的文件），因此可以放心地创建分支来修复bug。
+
+首先确定要在哪个分支上修复bug，假定需要在`master`分支上修复，就从`master`创建临时分支：
+
+```shell
+$ git switch master
+Switched to branch 'master'
+Your branch is ahead of 'origin/master' by 6 commits.
+  (use "git push" to publish your local commits)
+
+$ git switch -c issue-101
+Switched to a new branch 'issue-101'
+```
+
+现在修复bug，需要把最后一行作者改成 master，然后提交：
+
+```plain
+$ git add readme.txt 
+$ git commit -m "in branch issue-101 fix bug"
+[issue-101 4c805e2] fix bug 101
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+```
+
+![image.png](https://typora-yzj.oss-cn-hangzhou.aliyuncs.com/img/20241228225006.png)
+
+
+修复完成后，切换到 `master` 分支，并完成合并，最后删除 `issue-101` 分支：
+
+```plain
+$ git switch master
+Switched to branch 'master'
+Your branch is ahead of 'origin/master' by 6 commits.
+  (use "git push" to publish your local commits)
+
+$ git merge --no-ff -m "merged bug fix 101" issue-101
+Merge made by the 'ort' strategy.
+ readme.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+```
+
+![image.png](https://typora-yzj.oss-cn-hangzhou.aliyuncs.com/img/20241228225309.png)
+
+![image.png](https://typora-yzj.oss-cn-hangzhou.aliyuncs.com/img/20241228225407.png)
+
+太棒了，原计划两个小时的bug修复只花了5分钟！现在，是时候接着回到`dev`分支干活了！
+
+```plain
+$ git switch dev
+Switched to branch 'dev'
+
+$ git status
+On branch dev
+nothing to commit, working tree clean
+```
+
+工作区是干净的，刚才的工作现场存到哪去了？用 `git stash list` 命令看看：
+
+```plain
+$ git stash list
+stash@{0}: WIP on dev: 719f2e9 add dev work 2.
+```
+
+工作现场还在，Git把 `stash` 内容存在某个地方了（从图上可以看出是一个不同于提交的图标），但是需要恢复一下，有两个办法：
+
+一是用 `git stash apply` 恢复，但是恢复后，`stash` 内容并不删除，你需要用 `git stash drop` 来删除；
+
+另一种方式是用 `git stash pop`，恢复的同时把 `stash` 内容也删了：
+
+```shell
+$ git stash pop
+On branch dev
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+        modified:   devWork.txt
+        modified:   readme.txt
+
+no changes added to commit (use "git add" and/or "git commit -a")
+Dropped refs/stash@{0} (d31f9b9c11a803ea9246e3246d0cccd66b273d22)
+```
+
+![image.png](https://typora-yzj.oss-cn-hangzhou.aliyuncs.com/img/20241228225822.png)
+
+再用 `git stash list` 查看，就看不到任何 `stash` 内容了，同时工作区和暂存区内容都回来了。
+
+```plain
+$ git stash list
+```
+
+你可以多次`stash`，恢复的时候，先用`git stash list`查看，然后恢复指定的`stash`，用命令：
+
+```plain
+$ git stash apply stash@{0}
+```
+
+在 `master` 分支上修复了bug后，我们要想一想，`dev` 分支是早期从 `master` 分支分出来的，所以，这个bug其实在当前 `dev` 分支上也存在。
+
+那怎么在`dev`分支上修复同样的bug？重复操作一次，提交不就行了？
+
+有木有更简单的方法？
+
+有！
+
+同样的bug，要在 `dev`上修复，我们只需要把`869da06: in branch issue-101 fix bug`这个提交所做的修改“复制”到 `dev` 分支。注意：我们只想复制 `869da06: in branch issue-101 fix bug` 这个提交所做的修改，并不是把整个 `master` 分支merge过来。
+
+为了方便操作，Git专门提供了一个`cherry-pick` 命令，让我们能复制一个特定的提交到当前分支：
+
+```shell
+$ git branch
+* dev
+  master
+$ git cherry-pick 4c805e2
+error: Your local changes to the following files would be overwritten by merge:
+        readme.txt
+Please commit your changes or stash them before you merge.
+Aborting
+fatal: cherry-pick failed
+```
+
+`cherry-pick` 执行时，当前分支的工作区和暂存区最好都保持干净的状态（commit 或接着 stash）。
+
+Git自动给 `dev` 分支做了一次提交，注意这次提交的commit是 `1d4b803` ，它并不同于 `master` 的`869da06`，因为这两个commit只是改动相同，但确实是两个不同的commit。用 `git cherry-pick`，我们就不需要在 `dev` 分支上手动再把修bug的过程重复一遍（如果发生冲突，正常修改即可）。
+
+![image.png](https://typora-yzj.oss-cn-hangzhou.aliyuncs.com/img/20241228231131.png)
+
+有些聪明的童鞋会想了，既然可以在 `master` 分支上修复bug后，在 `dev` 分支上可以“重放”这个修复过程，那么直接在 `dev` 分支上修复bug，然后在 `master` 分支上“重放”行不行？当然可以，不过你仍然需要 `git stash` 命令保存现场，才能从 `dev` 分支切换到 `master` 分支。
+
+### Feature分支
+
+软件开发中，总有无穷无尽的新的功能要不断添加进来。
+
+添加一个新功能时，你肯定不希望因为一些实验性质的代码，把主分支搞乱了，所以，每添加一个新功能，最好新建一个 feature 分支，在上面开发，完成后，合并，最后，删除该 feature 分支。
+
+现在，你终于接到了一个新任务：开发代号为 Vulcan 的新功能，该功能计划用于下一代星际飞船。
+
+于是准备开发：
+
+```shell
+$ git switch -c feature-vulcan
+Switched to a new branch 'feature-vulcan'
+```
+
+5分钟后，开发完毕：
+
+```shell
+$ git add vulcan.py
+
+$ git status
+On branch feature-vulcan
+Changes to be committed:
+  (use "git reset HEAD <file>..." to unstage)
+
+	new file:   vulcan.py
+
+$ git commit -m "add feature vulcan"
+[feature-vulcan 287773e] add feature vulcan
+ 1 file changed, 2 insertions(+)
+ create mode 100644 vulcan.py
+```
+
+切回 `dev`，准备合并：
+
+```plain
+$ git switch dev
+```
+
+一切顺利的话，feature 分支和 bug 分支是类似的，合并，然后删除。
+
+但是！
+
+就在此时，接到上级命令，因经费不足，新功能必须取消！
+
+虽然白干了，但是这个包含机密资料的分支还是必须就地销毁：
+
+```plain
+$ git branch -d feature-vulcan
+error: The branch 'feature-vulcan' is not fully merged.
+If you are sure you want to delete it, run 'git branch -D feature-vulcan'.
+```
+
+销毁失败。Git友情提醒，`feature-vulcan` 分支还没有被合并，如果删除，将丢失掉修改，如果要强行删除，需要使用大写的`-D`参数。。
+
+现在我们强行删除：
+
+```plain
+$ git branch -D feature-vulcan
+Deleted branch feature-vulcan (was 287773e).
+```
+
+终于删除成功！
